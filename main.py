@@ -30,20 +30,9 @@ class ExcelComparerApp:
         self.card_payment_list = []  # 카드 결제 손님 목록
         self.load_card_payment_list()  # 앱 시작 시 카드 결제 손님 목록 불러오기
 
+        self.card_payment_entries = []  # 카드 결제 손님 목록
+
         self.setup_ui()
-
-    def setup_card_payment_section(self):
-        # 카드 결제 손님 추가하는 UI
-        card_payment_frame = Frame(self.root, bg="#2E2E2E")
-        card_payment_frame.pack(pady=10)
-
-        Label(card_payment_frame, text="카드 결제 손님 추가", font=("맑은 고딕", 14, "bold"), fg="white", bg="#2E2E2E").pack(pady=10)
-
-        self.card_payment_entries = []  # 거래처명, 차감금액 입력창 리스트
-
-        # 추가 버튼
-        add_button = Button(card_payment_frame, text="추가", command=self.add_card_payment_entry, bg="#4caf50", fg="white")
-        add_button.pack(pady=10)
 
     def add_card_payment_entry(self):
         # 새로운 입력 항목을 추가
@@ -174,8 +163,43 @@ class ExcelComparerApp:
         Button(self.root, text="❓ 도움말 보기", command=self.show_help, bg="#9c27b0", fg="white").pack(pady=5)
         self.set_default_template()
         # 카드 결제 손님 추가 UI
-        self.setup_card_payment_section()
+            # 카드 결제 손님 추가 버튼
+        add_button = Button(self.root, text="카드 결제 손님 추가", command=self.open_card_payment_modal)
+        add_button.pack(pady=10)
 
+
+    def open_card_payment_modal(self):
+        # 모달창을 생성
+        modal_window = Toplevel(self.root)
+        modal_window.title("카드 결제 손님 추가")
+        modal_window.geometry("400x200")
+
+        # 거래처명 입력
+        Label(modal_window, text="거래처명:").pack(pady=5)
+        card_name_entry = Entry(modal_window, width=30)
+        card_name_entry.pack(pady=5)
+
+        # 차감 금액 입력
+        Label(modal_window, text="차감 금액:").pack(pady=5)
+        discount_amount_entry = Entry(modal_window, width=30)
+        discount_amount_entry.pack(pady=5)
+
+        # 추가 버튼 (입력값을 목록에 추가)
+        def add_entry():
+            card_name = card_name_entry.get()
+            try:
+                discount_amount = float(discount_amount_entry.get())
+                if card_name and discount_amount >= 0:
+                    self.card_payment_entries.append((card_name, discount_amount))
+                    messagebox.showinfo("추가 완료", f"{card_name}의 카드 결제 정보가 추가되었습니다.")
+                    modal_window.destroy()  # 모달창 닫기
+                else:
+                    messagebox.showerror("입력 오류", "거래처명과 차감 금액을 정확히 입력해주세요.")
+            except ValueError:
+                messagebox.showerror("입력 오류", "차감 금액은 숫자여야 합니다.")
+
+        add_button = Button(modal_window, text="추가", command=add_entry)
+        add_button.pack(pady=10)
 
     def toggle_template_button(self):
         # "b. 새로운 파일 열기"를 선택하면 양식 선택 버튼을 활성화
