@@ -1,5 +1,5 @@
 from tkinter import *
-from tkinter import filedialog, ttk, messagebox
+from tkinter import filedialog, ttk, messagebox, simpledialog
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import pandas as pd
 import os
@@ -7,6 +7,8 @@ import calendar
 from datetime import datetime
 from openpyxl import load_workbook
 from tkinter import Toplevel, Label, Text, Scrollbar, RIGHT, Y, BOTH, END
+import csv
+from CardPaymentList import CardPaymentList
 
 class ExcelComparerApp:
     def __init__(self, root):
@@ -27,86 +29,10 @@ class ExcelComparerApp:
         self.df_result = None
         self.df2 = None
 
-        self.card_payment_list = []  # 카드 결제 손님 목록
-        self.load_card_payment_list()  # 앱 시작 시 카드 결제 손님 목록 불러오기
-
-        self.card_payment_entries = []  # 카드 결제 손님 목록
-
+            # 카드 결제 손님 목록 모듈화
+        self.card_payment_list = CardPaymentList(self.root)
+        
         self.setup_ui()
-
-    def add_card_payment_entry(self):
-        # 새로운 입력 항목을 추가
-        entry_frame = Frame(self.root, bg="#2E2E2E")
-        entry_frame.pack(pady=5)
-
-        # 거래처명과 차감 금액을 입력할 Entry 위젯 생성
-        card_name_entry = Entry(entry_frame, width=20, bg="white", fg="black")
-        card_name_entry.insert(0, "거래처명")  # 기본값으로 '거래처명' 설정
-        card_name_entry.pack(side=LEFT, padx=10)
-
-        discount_amount_entry = Entry(entry_frame, width=10, bg="white", fg="black")
-        discount_amount_entry.insert(0, "차감 금액")  # 기본값으로 '차감 금액' 설정
-        discount_amount_entry.pack(side=LEFT, padx=10)
-
-        # 추가된 항목들을 리스트에 저장
-        self.card_payment_entries.append((card_name_entry, discount_amount_entry))
-
-    def save_card_payment_list(self):
-        # 카드 결제 손님 목록을 파일로 저장 (CSV 파일)
-        with open("card_payment_list.csv", mode="w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow(["거래처명", "차감 금액"])  # 헤더 작성
-            for card_name_entry, discount_amount_entry in self.card_payment_entries:
-                card_name = card_name_entry.get()
-                try:
-                    discount_amount = float(discount_amount_entry.get())  # 차감 금액
-                    writer.writerow([card_name, discount_amount])
-                except ValueError:
-                    continue  # 차감 금액이 숫자가 아닌 경우 넘어감
-
-    def load_card_payment_list(self):
-        # 카드 결제 손님 목록을 파일에서 불러오기 (CSV 파일)
-        if os.path.exists("card_payment_list.csv"):
-            with open("card_payment_list.csv", mode="r") as file:
-                reader = csv.reader(file)
-                next(reader)  # 헤더 스킵
-                for row in reader:
-                    if len(row) == 2:
-                        card_name, discount_amount = row
-                        self.card_payment_entries.append((card_name, float(discount_amount)))
-                        self.update_ui_for_card_payment(card_name, discount_amount)
-
-    def update_ui_for_card_payment(self, card_name, discount_amount):
-        # 기존 UI에 카드 결제 손님 추가 (동적으로 추가)
-        entry_frame = Frame(self.root, bg="#2E2E2E")
-        entry_frame.pack(pady=5)
-
-        card_name_entry = Entry(entry_frame, width=20, bg="white", fg="black")
-        card_name_entry.insert(0, card_name)
-        card_name_entry.pack(side=LEFT, padx=10)
-
-        discount_amount_entry = Entry(entry_frame, width=10, bg="white", fg="black")
-        discount_amount_entry.insert(0, str(discount_amount))
-        discount_amount_entry.pack(side=LEFT, padx=10)
-
-        # 추가된 항목을 목록에 저장
-        self.card_payment_entries.append((card_name_entry, discount_amount_entry))
-
-
-    def apply_card_discounts(self):
-        # 카드 결제 손님의 차감 금액을 적용
-        for card_name_entry, discount_amount_entry in self.card_payment_entries:
-            card_name = card_name_entry.get()
-            try:
-                discount_amount = float(discount_amount_entry.get())  # 차감 금액
-                # 거래처명이 없거나 차감 금액이 잘못 입력된 경우를 처리
-                if not card_name or discount_amount < 0:
-                    continue
-
-                # 매출에서 차감하는 로직 (매출에서 해당 금액을 차감)
-                self.df_result.loc[self.df_result["상호"] == card_name, "매출금액"] -= discount_amount
-            except ValueError:
-                continue  # 차감 금액이 숫자가 아닌 경우 넘어감
 
     def setup_ui(self):
         Label(self.root, text="엑셀 거래처 비교 및 세금계산서 양식 자동 작성기", font=("맑은 고딕", 16, "bold"), bg="#f8f8f8").pack(pady=10)
@@ -161,45 +87,12 @@ class ExcelComparerApp:
 
         Button(self.root, text="초기화", command=self.reset_all, bg="#e91e63", fg="white").pack(pady=5)
         Button(self.root, text="❓ 도움말 보기", command=self.show_help, bg="#9c27b0", fg="white").pack(pady=5)
+
+        # 카드 결제 손님 목록 버튼 추가
+        self.view_card_payment_button = Button(self.root, text="카드 결제 손님 목록 보기", command=self.view_card_payment_list)
+        self.view_card_payment_button.pack(pady=10)
+
         self.set_default_template()
-        # 카드 결제 손님 추가 UI
-            # 카드 결제 손님 추가 버튼
-        add_button = Button(self.root, text="카드 결제 손님 추가", command=self.open_card_payment_modal)
-        add_button.pack(pady=10)
-
-
-    def open_card_payment_modal(self):
-        # 모달창을 생성
-        modal_window = Toplevel(self.root)
-        modal_window.title("카드 결제 손님 추가")
-        modal_window.geometry("400x200")
-
-        # 거래처명 입력
-        Label(modal_window, text="거래처명:").pack(pady=5)
-        card_name_entry = Entry(modal_window, width=30)
-        card_name_entry.pack(pady=5)
-
-        # 차감 금액 입력
-        Label(modal_window, text="차감 금액:").pack(pady=5)
-        discount_amount_entry = Entry(modal_window, width=30)
-        discount_amount_entry.pack(pady=5)
-
-        # 추가 버튼 (입력값을 목록에 추가)
-        def add_entry():
-            card_name = card_name_entry.get()
-            try:
-                discount_amount = float(discount_amount_entry.get())
-                if card_name and discount_amount >= 0:
-                    self.card_payment_entries.append((card_name, discount_amount))
-                    messagebox.showinfo("추가 완료", f"{card_name}의 카드 결제 정보가 추가되었습니다.")
-                    modal_window.destroy()  # 모달창 닫기
-                else:
-                    messagebox.showerror("입력 오류", "거래처명과 차감 금액을 정확히 입력해주세요.")
-            except ValueError:
-                messagebox.showerror("입력 오류", "차감 금액은 숫자여야 합니다.")
-
-        add_button = Button(modal_window, text="추가", command=add_entry)
-        add_button.pack(pady=10)
 
     def toggle_template_button(self):
         # "b. 새로운 파일 열기"를 선택하면 양식 선택 버튼을 활성화
@@ -207,7 +100,54 @@ class ExcelComparerApp:
             self.template_button.config(state=NORMAL)
         else:
             self.template_button.config(state=DISABLED)
-            
+
+    def view_card_payment_list(self):
+        # 카드 결제 손님 목록 보기 모달 창
+        modal_window = Toplevel(self.root)
+        modal_window.title("카드 결제 손님 목록")
+        modal_window.geometry("600x400")
+
+      # 카드 결제 손님 목록을 Treeview로 표시
+        tree = ttk.Treeview(modal_window, columns=("Card Name", "Discount Amount"), show="headings")
+        tree.pack(expand=True, fill=BOTH)
+
+        tree.heading("Card Name", text="거래처명")
+        tree.heading("Discount Amount", text="차감 금액")
+
+        # 카드 결제 손님 목록을 가져와서 Treeview에 추가
+        for card_name, discount_amount in self.card_payment_list.get_entries():
+            tree.insert("", "end", values=(card_name, discount_amount))
+
+        # 마우스 오른쪽 버튼 메뉴
+        def on_right_click(event, item):
+            context_menu = Menu(modal_window, tearoff=0)
+            context_menu.add_command(label="수정", command=lambda: self.modify_card_payment(item))
+            context_menu.add_command(label="삭제", command=lambda: self.delete_card_payment(item))
+            context_menu.post(event.x_root, event.y_root)
+
+        tree.bind("<Button-3>", on_right_click)
+
+    def edit_card_payment(self, item):
+        # 카드 결제 손님의 정보 수정
+        selected_item = self.treeview.item(item)
+        card_name, discount_amount = selected_item["values"]
+        
+        new_card_name = simpledialog.askstring("수정", "거래처명을 수정해주세요:", initialvalue=card_name)
+        new_discount_amount = simpledialog.askfloat("수정", "차감 금액을 수정해주세요:", initialvalue=discount_amount)
+        
+        if new_card_name and new_discount_amount is not None:
+            index = self.card_payment_list.get_entries().index((card_name, discount_amount))
+            self.card_payment_list.update_entry(index, new_card_name, new_discount_amount)
+            self.view_card_payment_list()  # 목록 갱신
+
+    def delete_card_payment(self, item):
+        # 카드 결제 손님 삭제
+        selected_item = self.treeview.item(item)
+        card_name, discount_amount = selected_item["values"]
+        index = self.card_payment_list.get_entries().index((card_name, discount_amount))
+        self.card_payment_list.delete_entry(index)
+        self.view_card_payment_list()  # 목록 갱신
+        
     def show_help(self):
         help_window = Toplevel(self.root)
         help_window.title("도움말 - 사용 설명서")
@@ -263,9 +203,9 @@ class ExcelComparerApp:
     - Excel이 설치된 환경에서 실행되어야 `.xls` 파일 저장 가능
     - 기본 양식 파일은 본 프로그램과 동일한 폴더에 위치해야 합니다
     """
-
         text.insert(END, help_content)
         text.config(state="disabled")
+
 
     def on_drop_1(self, event):
         path = event.data.strip("{}")
@@ -434,6 +374,7 @@ class ExcelComparerApp:
                 messagebox.showinfo("저장 완료", f"양식이 저장되었습니다: {save_path}")
         except Exception as e:
             messagebox.showerror("오류", f"양식 처리 중 오류:\n{e}")
+
 
 if __name__ == '__main__':
     root = TkinterDnD.Tk()
