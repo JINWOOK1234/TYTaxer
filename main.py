@@ -88,11 +88,18 @@ class ExcelComparerApp:
         Button(self.root, text="초기화", command=self.reset_all, bg="#e91e63", fg="white").pack(pady=5)
         Button(self.root, text="❓ 도움말 보기", command=self.show_help, bg="#9c27b0", fg="white").pack(pady=5)
 
-        # 카드 결제 손님 목록 버튼 추가
-        self.view_card_payment_button = Button(self.root, text="카드 결제 손님 목록 보기", command=self.view_card_payment_list)
-        self.view_card_payment_button.pack(pady=10)
-
+   
         self.set_default_template()
+        
+            # 카드 결제 손님 목록 보기 버튼
+        Button(self.root, text="카드 결제 손님 목록 보기", command=self.view_card_payment_list).pack(pady=10)
+        
+        # 카드 결제 손님 추가 버튼 (상단에 배치)
+        add_button_frame = Frame(self.root)
+        add_button_frame.pack(pady=10)
+        add_button = Button(add_button_frame, text="손님 추가 (+)", command=self.open_card_payment_modal)
+        add_button.pack(side=LEFT, padx=5)
+
 
     def toggle_template_button(self):
         # "b. 새로운 파일 열기"를 선택하면 양식 선택 버튼을 활성화
@@ -126,28 +133,50 @@ class ExcelComparerApp:
             context_menu.post(event.x_root, event.y_root)
 
         tree.bind("<Button-3>", on_right_click)
+        
+        # 새로 추가하는 '...' 버튼 추가 (동적 추가)
+        add_button = Button(modal_window, text="새로 추가 (+)", command=self.open_card_payment_modal)
+        add_button.pack(pady=10)
 
-    def edit_card_payment(self, item):
-        # 카드 결제 손님의 정보 수정
-        selected_item = self.treeview.item(item)
-        card_name, discount_amount = selected_item["values"]
-        
-        new_card_name = simpledialog.askstring("수정", "거래처명을 수정해주세요:", initialvalue=card_name)
-        new_discount_amount = simpledialog.askfloat("수정", "차감 금액을 수정해주세요:", initialvalue=discount_amount)
-        
-        if new_card_name and new_discount_amount is not None:
-            index = self.card_payment_list.get_entries().index((card_name, discount_amount))
-            self.card_payment_list.update_entry(index, new_card_name, new_discount_amount)
-            self.view_card_payment_list()  # 목록 갱신
+   
+    def modify_card_payment(self, item):
+        # 선택된 항목 수정
+        card_name, discount_amount = self.card_payment_entries[int(item)]
+        modal_window = Toplevel(self.root)
+        modal_window.title("카드 결제 손님 수정")
+        modal_window.geometry("400x200")
+
+        Label(modal_window, text="거래처명:").pack(pady=5)
+        card_name_entry = Entry(modal_window, width=30)
+        card_name_entry.insert(0, card_name)
+        card_name_entry.pack(pady=5)
+
+        Label(modal_window, text="차감 금액:").pack(pady=5)
+        discount_amount_entry = Entry(modal_window, width=30)
+        discount_amount_entry.insert(0, str(discount_amount))
+        discount_amount_entry.pack(pady=5)
+
+        def save_modifications():
+            new_card_name = card_name_entry.get()
+            new_discount_amount = float(discount_amount_entry.get())
+            if new_card_name and new_discount_amount >= 0:
+                self.card_payment_entries[int(item)] = (new_card_name, new_discount_amount)
+                messagebox.showinfo("수정 완료", f"{new_card_name}의 정보가 수정되었습니다.")
+                modal_window.destroy()  # 모달창 닫기
+            else:
+                messagebox.showerror("입력 오류", "거래처명과 차감 금액을 정확히 입력해주세요.")
+
+        save_button = Button(modal_window, text="저장", command=save_modifications)
+        save_button.pack(pady=10)
 
     def delete_card_payment(self, item):
-        # 카드 결제 손님 삭제
-        selected_item = self.treeview.item(item)
-        card_name, discount_amount = selected_item["values"]
-        index = self.card_payment_list.get_entries().index((card_name, discount_amount))
-        self.card_payment_list.delete_entry(index)
-        self.view_card_payment_list()  # 목록 갱신
-        
+        # 선택된 항목 삭제
+        card_name = self.card_payment_entries[int(item)][0]
+        if messagebox.askyesno("삭제 확인", f"{card_name}을 삭제하시겠습니까?"):
+            del self.card_payment_entries[int(item)]
+            messagebox.showinfo("삭제 완료", f"{card_name}이 삭제되었습니다.")
+
+     
     def show_help(self):
         help_window = Toplevel(self.root)
         help_window.title("도움말 - 사용 설명서")
@@ -241,6 +270,40 @@ class ExcelComparerApp:
         for tree in [self.preview1, self.preview2]:
             tree.delete(*tree.get_children())
         messagebox.showinfo("초기화", "모든 정보가 초기화되었습니다.")
+        
+    def open_card_payment_modal(self):
+        # 모달창을 생성
+        modal_window = Toplevel(self.root)
+        modal_window.title("카드 결제 손님 추가")
+        modal_window.geometry("400x200")
+
+        # 거래처명 입력
+        Label(modal_window, text="거래처명:").pack(pady=5)
+        card_name_entry = Entry(modal_window, width=30)
+        card_name_entry.pack(pady=5)
+
+        # 차감 금액 입력
+        Label(modal_window, text="차감 금액:").pack(pady=5)
+        discount_amount_entry = Entry(modal_window, width=30)
+        discount_amount_entry.pack(pady=5)
+
+        # 추가 버튼 (입력값을 목록에 추가)
+        def add_entry():
+            card_name = card_name_entry.get()
+            try:
+                discount_amount = float(discount_amount_entry.get())
+                if card_name and discount_amount >= 0:
+                    self.card_payment_list.get_entries().append((card_name, discount_amount))
+                    messagebox.showinfo("추가 완료", f"{card_name}의 카드 결제 정보가 추가되었습니다.")
+                    modal_window.destroy()  # 모달창 닫기
+                else:
+                    messagebox.showerror("입력 오류", "거래처명과 차감 금액을 정확히 입력해주세요.")
+            except ValueError:
+                messagebox.showerror("입력 오류", "차감 금액은 숫자여야 합니다.")
+
+        add_button = Button(modal_window, text="추가", command=add_entry)
+        add_button.pack(pady=10)
+    
 
     def set_default_template(self):
         if self.template_option.get() == 0:
