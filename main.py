@@ -10,7 +10,9 @@ from tkinter import Toplevel, Label, Text, Scrollbar, RIGHT, Y, BOTH, END
 import csv
 from CardPaymentList import CardPaymentList
 
+
 class ExcelComparerApp:
+    
     def __init__(self, root):
         self.root = root
         self.root.title("엑셀 거래처 비교 & 자동 양식 작성기")
@@ -35,6 +37,7 @@ class ExcelComparerApp:
         self.setup_ui()
 
     def setup_ui(self):
+        from ExcelHandler import on_fill_template, on_compare_file
         Label(self.root, text="엑셀 거래처 비교 및 세금계산서 양식 자동 작성기", font=("맑은 고딕", 16, "bold"), bg="#f8f8f8").pack(pady=10)
         frame = Frame(self.root, bg="#f8f8f8")
         frame.pack(pady=10)
@@ -66,7 +69,7 @@ class ExcelComparerApp:
         Radiobutton(save_frame, text="저장 안 함", variable=self.save_option, value=0, bg="#f8f8f8").pack(side=LEFT)
         Radiobutton(save_frame, text="저장 함", variable=self.save_option, value=1, bg="#f8f8f8").pack(side=LEFT)
 
-        Button(self.root, text="📊 거래처 비교하기", command=self.compare_files, bg="#4caf50", fg="white", font=("맑은 고딕", 12)).pack(pady=10)
+        Button(self.root, text="📊 거래처 비교하기", command=lambda:on_compare_file(self), bg="#4caf50", fg="white", font=("맑은 고딕", 12)).pack(pady=10)
 
         frame2 = Frame(self.root, bg="#f8f8f8")
         frame2.pack(pady=10)
@@ -83,7 +86,7 @@ class ExcelComparerApp:
 
         month_options = [f"{i}월" for i in range(1, 13)]
         OptionMenu(frame2, self.month_var, *month_options).pack(side=LEFT, padx=10)
-        Button(frame2, text="📝 양식에 입력하기", command=self.fill_template, bg="#2196f3", fg="white").pack(side=LEFT, padx=10)
+        Button(frame2, text="📝 양식에 입력하기", command=lambda:on_fill_template(self), bg="#2196f3", fg="white").pack(side=LEFT, padx=10)
 
         Button(self.root, text="초기화", command=self.reset_all, bg="#e91e63", fg="white").pack(pady=5)
         Button(self.root, text="❓ 도움말 보기", command=self.show_help, bg="#9c27b0", fg="white").pack(pady=5)
@@ -282,7 +285,7 @@ class ExcelComparerApp:
         path = event.data.strip("{}")
         self.file2_path.set(path)
         self.show_preview(path, self.preview2)
-
+   
     def show_preview(self, path, tree):
         try:
             df = pd.read_excel(path).head(5)
@@ -361,117 +364,6 @@ class ExcelComparerApp:
             if path:
                 self.template_path.set(path)
                 messagebox.showinfo("양식 선택 완료", f"선택된 양식: {os.path.basename(path)}")
-
-    def compare_files(self):
-        try:
-            df1 = pd.read_excel(self.file1_path.get(), skiprows=5)  # B6 아래부터
-            df2 = pd.read_excel(self.file2_path.get(), skiprows=1)  # B2, R2 아래부터
-            self.df2 = df2
-
-            name_col = df2.iloc[:, 1].astype(str).str.strip()    # B열
-            alias_col = df2.iloc[:, 17].astype(str).str.strip()  # R열
-
-            compare_names = df1.iloc[:, 1].astype(str).str.strip()  # 1번 B열
-            match_flags, match_indices = [], []
-
-            for name in compare_names:
-                try:
-                    idx = name_col[name_col == name].index[0]
-                    match_flags.append(1)
-                    match_indices.append(idx + 3)
-                except IndexError:
-                    try:
-                        idx = alias_col[alias_col == name].index[0]
-                        match_flags.append(1)
-                        match_indices.append(idx + 3)
-                    except IndexError:
-                        match_flags.append(0)
-                        match_indices.append("")
-
-            df1["구분"] = match_flags
-            df1["일치 인덱스"] = match_indices
-            self.df_result = df1
-
-            if self.save_option.get() == 1:
-                save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
-                if save_path:
-                    df1.to_excel(save_path, index=False)
-                    messagebox.showinfo("저장 완료", "비교 결과 저장 완료!")
-            else:
-                messagebox.showinfo("완료", "비교 완료 (저장 안 함)")
-
-        except Exception as e:
-            messagebox.showerror("오류", f"파일 비교 중 오류 발생: {e}")
-
-    def fill_template(self):
-        def normalize_path(path):
-            return os.path.normpath(path)
-
-        if self.df_result is None or not self.template_path.get():
-            messagebox.showwarning("경고", "비교 결과 또는 양식이 없습니다.")
-            return
-
-        template_path = self.template_path.get()
-        month = int(self.month_var.get().replace("월", ""))
-        last_day = calendar.monthrange(datetime.now().year, month)[1]
-        write_date = datetime(datetime.now().year, month, last_day).strftime("%Y%m%d")
-
-        # 자동으로 저장 파일명 생성
-        default_filename = f"{self.month_var.get().split()[0]}_계산서등록양식(대량).xlsx"
-
-        try:
-            wb = load_workbook(template_path)
-            ws = wb.active
-            start_row, row_offset = 7, 0
-
-            for _, row in self.df_result[self.df_result["구분"] == 1].iterrows():
-                idx = row["일치 인덱스"]
-                if idx == "": continue
-                
-                idx = int(idx) - 3
-                if idx >= len(self.df2): continue
-                sale_amt = row.iloc[4] - row.iloc[6]
-                if pd.isna(sale_amt) or sale_amt == 0: continue
-
-               # 카드 결제 차감 후 금액 처리
-                card_discount = self.card_payment_list.get_entries().get(row["매출처"], 0)  # 매출처가 없으면 0 처리
-                sale_amt -= card_discount  # 차감 금액 적용
-
-                df2 = self.df2
-                r = start_row + row_offset
-                def safe(cell, val): ws[cell] = val if pd.notna(val) else ""
-                ws[f"A{r}"] = "05"
-                ws[f"B{r}"] = write_date
-                safe(f"C{r}", df2.iloc[idx, 2])
-                safe(f"E{r}", df2.iloc[idx, 1])
-                safe(f"F{r}", df2.iloc[idx, 4])
-                safe(f"G{r}", df2.iloc[idx, 5])
-                safe(f"H{r}", df2.iloc[idx, 6])
-                safe(f"I{r}", df2.iloc[idx, 7])
-                safe(f"J{r}", df2.iloc[idx, 13])
-                ws[f"L{r}"] = sale_amt
-                ws[f"R{r}"] = sale_amt
-                ws[f"S{r}"] = sale_amt
-                ws[f"N{r}"] = last_day
-                ws[f"O{r}"] = "냉동수산물외"
-                ws[f"Q{r}"] = "1"
-                ws[f"AT{r}"] = "02"
-                row_offset += 1
-
-            save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")], initialfile=default_filename)
-
-            if save_path:
-                save_path = normalize_path(save_path)
-                if os.path.isdir(save_path):
-                    messagebox.showerror("오류", "파일명을 포함한 경로를 지정해주세요.")
-                    return
-                if os.path.abspath(save_path) == os.path.abspath(template_path):
-                    messagebox.showerror("오류", "원본 양식 파일에 덮어쓸 수 없습니다.")
-                    return
-                wb.save(save_path)
-                messagebox.showinfo("저장 완료", f"양식이 저장되었습니다: {save_path}")
-        except Exception as e:
-            messagebox.showerror("오류", f"양식 처리 중 오류:\n{e}")
 
 
 if __name__ == '__main__':

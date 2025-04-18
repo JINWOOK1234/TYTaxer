@@ -38,6 +38,11 @@ class CardPaymentList:
 
     def get_entries(self):
         return self.card_payment_entries  # 딕셔너리 형태로 반환
+    
+    def to_dict(self):
+        """거래처명을 키, 차감 금액을 값으로 하는 dict 반환"""
+        return self.card_payment_entries.copy()
+
 
     def delete_entry(self, card_name):
         # 카드 결제 손님 삭제 (딕셔너리에서 삭제)
