@@ -427,18 +427,15 @@ class ExcelComparerApp:
             for _, row in self.df_result[self.df_result["구분"] == 1].iterrows():
                 idx = row["일치 인덱스"]
                 if idx == "": continue
-                try:
-                    idx = int(idx) - 3
-                    if idx >= len(self.df2): continue
-                    sale_amt = row.iloc[4] - row.iloc[6]
-                    if pd.isna(sale_amt) or sale_amt == 0: continue
+                
+                idx = int(idx) - 3
+                if idx >= len(self.df2): continue
+                sale_amt = row.iloc[4] - row.iloc[6]
+                if pd.isna(sale_amt) or sale_amt == 0: continue
 
-                     # 카드 결제 차감 후 금액
-                    card_discount = self.df_result.loc[self.df_result["상호"] == row["상호"], "차감 금액"].values
-                    if card_discount.size > 0:
-                        sale_amt -= card_discount[0]  # 차감 금액 적용
-
-                except: continue
+               # 카드 결제 차감 후 금액 처리
+                card_discount = self.card_payment_list.get_entries().get(row["매출처"], 0)  # 매출처가 없으면 0 처리
+                sale_amt -= card_discount  # 차감 금액 적용
 
                 df2 = self.df2
                 r = start_row + row_offset
